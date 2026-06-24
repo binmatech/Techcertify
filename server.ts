@@ -972,8 +972,9 @@ app.post("/api/admin/certificate-design", authenticateToken, async (req: any, re
 // start the Express and Vite dev/prod layers
 async function startServer() {
   // Vite integration 
-  if (process.env.NODE_ENV !== "production") {
-    const { createServer: createViteServer } = await import("vite");
+  if (process.env.NODE_ENV !== "production" && !process.env.VERCEL) {
+    const viteModule = "vite";
+    const { createServer: createViteServer } = await import(viteModule);
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
