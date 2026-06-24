@@ -131,30 +131,52 @@ localUserDb.set("nuddywale@gmail.com", {
   selectedCourseIds: ["dev-101", "des-201", "ds-301"]
 });
 
-// Lazy MongoDB Connection
-let mongoClient: MongoClient | null = null;
-let isConnected = false;
+// Lazy MongoDB Connection with global cache for serverless environments (Vercel)
+interface MongoCache {
+  conn: any;
+  promise: Promise<any> | null;
+}
+
+let cached: MongoCache = (global as any).mongo;
+if (!cached) {
+  cached = (global as any).mongo = { conn: null, promise: null };
+}
+
+let lastConnectionError: string | null = null;
 
 async function getMongoDb() {
   const uri = process.env.MONGODB_URI;
   if (!uri) {
+    lastConnectionError = "MONGODB_URI environment variable is not defined";
     return null;
   }
   
-  if (mongoClient && isConnected) {
-    return mongoClient.db();
+  if (cached.conn) {
+    return cached.conn;
+  }
+
+  if (!cached.promise) {
+    const opts = {
+      serverSelectionTimeoutMS: 5000,
+    };
+    
+    const client = new MongoClient(uri, opts as MongoClientOptions);
+    cached.promise = client.connect().then((connectedClient) => {
+      const db = connectedClient.db();
+      return {
+        client: connectedClient,
+        db: db,
+      };
+    });
   }
 
   try {
-    mongoClient = new MongoClient(uri, {
-      serverSelectionTimeoutMS: 5000,
-    } as MongoClientOptions);
-    await mongoClient.connect();
-    isConnected = true;
-    console.log("Successfully connected to MongoDB Atlas database.");
+    const result = await cached.promise;
+    cached.conn = result.db;
+    lastConnectionError = null;
     
+    const db = cached.conn;
     // Auto-seed/validate admin user
-    const db = mongoClient.db();
     const usersCollection = db.collection("users");
     const adminEmail = "nuddywale@gmail.com";
     const existingAdmin = await usersCollection.findOne({ email: adminEmail });
@@ -230,8 +252,9 @@ async function getMongoDb() {
     return db;
   } catch (err) {
     console.error("Warning: Failed to connect to MongoDB Atlas host. Falling back to secure in-memory context.", err);
-    isConnected = false;
-    mongoClient = null;
+    lastConnectionError = err instanceof Error ? err.message : String(err);
+    cached.promise = null; // reset promise to retry on next request if connection failed
+    cached.conn = null;
     return null;
   }
 }
@@ -241,12 +264,14 @@ async function getMongoDb() {
 // 1. Get database connectivity state
 app.get("/api/db-state", async (req, res) => {
   const uriProvided = !!process.env.MONGODB_URI;
-  const dbConnected = isConnected;
+  const db = await getMongoDb();
+  const dbConnected = !!db;
   res.json({
     usingAtlas: uriProvided && dbConnected,
     mode: (uriProvided && dbConnected) ? "MongoDB Atlas" : "Secure Memory Cache (MongoDB offline)",
     configured: uriProvided,
-    googleClientId: process.env.GOOGLE_CLIENT_ID || null
+    googleClientId: process.env.GOOGLE_CLIENT_ID || null,
+    error: lastConnectionError
   });
 });
 

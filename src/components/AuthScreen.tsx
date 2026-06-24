@@ -37,11 +37,12 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [dbState, setDbState] = useState<{ usingAtlas: boolean; mode: string; configured: boolean; googleClientId?: string | null }>({
+  const [dbState, setDbState] = useState<{ usingAtlas: boolean; mode: string; configured: boolean; googleClientId?: string | null; error?: string | null }>({
     usingAtlas: false,
     mode: "Establishing host query...",
     configured: false,
-    googleClientId: null
+    googleClientId: null,
+    error: null
   });
 
   // Simulated Google Sign In Dialog State
@@ -370,11 +371,16 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
               <span>Fully customizable layout themes & signatures</span>
             </div>
             
-            <div className="bg-slate-900/60 border border-slate-800 rounded-lg p-2 mt-2">
-              <p className="text-[10px] text-slate-500 font-mono tracking-tight leading-normal">
+            <div className="bg-slate-900/60 border border-slate-800 rounded-lg p-2.5 mt-2">
+              <p className="text-[10px] text-slate-400 font-mono tracking-tight leading-normal">
                 DATABASE CONFIG:<br />
-                {dbState.mode}
+                <span className="text-slate-500">{dbState.mode}</span>
               </p>
+              {dbState.error && (
+                <p className="text-[10px] text-rose-400/90 font-mono tracking-tight mt-1.5 bg-rose-500/10 border border-rose-500/20 p-1.5 rounded leading-normal">
+                  <span className="font-semibold text-rose-300">CONNECTION ERROR:</span> {dbState.error}
+                </p>
+              )}
             </div>
           </div>
         </div>
